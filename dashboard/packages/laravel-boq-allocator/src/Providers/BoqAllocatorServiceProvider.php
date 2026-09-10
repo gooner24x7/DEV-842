@@ -1,12 +1,11 @@
 <?php
 
-declare(strict_types=1);
+namespace BoqAllocator\Providers;
 
-namespace App\Providers;
-
-use App\Service\BoqAllocator\AiProviderService;
-use App\Service\BoqAllocator\BoqAllocationEngine;
-use App\Service\BoqAllocator\BoqParserService;
+use BoqAllocator\Services\AiProviderService;
+use BoqAllocator\Services\AitoolV3Classifier;
+use BoqAllocator\Services\BoqAllocationEngine;
+use BoqAllocator\Services\BoqParserService;
 use Illuminate\Support\ServiceProvider;
 
 class BoqAllocatorServiceProvider extends ServiceProvider
@@ -29,10 +28,13 @@ class BoqAllocatorServiceProvider extends ServiceProvider
             return new AiProviderService(null, config('boq-allocator'));
         });
 
+        $this->app->singleton(AitoolV3Classifier::class, fn () => new AitoolV3Classifier());
+
         $this->app->singleton(BoqAllocationEngine::class, function ($app) {
             return new BoqAllocationEngine(
                 $app->make(BoqParserService::class),
-                config('boq-allocator')
+                config('boq-allocator'),
+                $app->make(AitoolV3Classifier::class)
             );
         });
     }

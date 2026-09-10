@@ -3,16 +3,26 @@
         <v-card>
             <v-card-title>Review BOQ Data</v-card-title>
             <v-card-subtitle>
-                {{ countPreviewItems() }} works packages were generated from the uploaded file. <br>
-                Please review the data and click save to add these works packages to the project.
+                {{ countPreviewItems() }} hierarchy items were generated from the uploaded file. <br>
+                Please review the data and click save to add the selected hierarchy to the project.
             </v-card-subtitle>
             <v-card-text>
+                <div v-if="metadata" class="wp-preview-summary mb-4">
+                    <template v-if="metadata.allocated_records !== undefined">
+                        <span>{{ metadata.allocated_records }} allocated bill lines</span>
+                        <span>{{ metadata.packages_used }} {{ metadata.top_level_label }}</span>
+                        <span v-if="metadata.work_items_used">{{ metadata.work_items_used }} {{ metadata.allocation_node_label }}</span>
+                    </template>
+                    <span v-else>{{ metadata.mapped_bills }} of {{ metadata.total_bills }} bills mapped</span>
+                    <span>{{ metadata.overall_accuracy_score }} overall accuracy</span>
+                    <span>{{ metadata.execution_time }}</span>
+                </div>
                 <v-treeview
                     :value="selectedPreviewItems"
                     @input="onPreviewSelectionChange"
                     v-if="previewData && previewData.length"
                     :items="previewData"
-                    item-key="id"
+                    item-key="selection_key"
                     item-text="name"
                     item-children="children"
                     return-object
@@ -20,10 +30,10 @@
                     selection-type="independent"
                     dense
                 >
-                    <template v-slot:label="{ item, open }">
+                    <template v-slot:label="{ item }">
                         <div class="wp-preview-item">{{ item.name }}  {{ countItemChildren(item) }}</div>
                         <div class="wp-preview-attributes" v-if="item.attributes">
-                            <div class="wp-preview-chip" v-for="(value, key) in item.attributes" @click="showDialog(item)">
+                            <div class="wp-preview-chip" v-for="(value, key) in item.attributes" :key="key" @click="showDialog(item)">
                                 {{ key + ': ' + value }}
                             </div>
                         </div>
@@ -34,7 +44,7 @@
             <v-card-actions>
                 <v-spacer></v-spacer>
                 <v-btn color="blue darken-1" text @click="close()">Cancel</v-btn>
-                <v-btn color="blue darken-1" text @click="save()">Save</v-btn>
+                <v-btn color="blue darken-1" text :disabled="!selectedPreviewItems.length" @click="save()">Save</v-btn>
             </v-card-actions>
         </v-card>
         <v-dialog
@@ -51,9 +61,13 @@
                         <p class="wp-attribute-text"> {{ dialogItem.attributes.ai_rationale }}</p>
                     </div>
 
-                    <div v-if="dialogItem?.source_evidence">
+                    <div v-if="dialogItem?.source_evidence?.length">
                         <h5 class="wp-attribute-heading">Source Evidence</h5>
-                        <div class="wp-attribute-text" v-html="getSourceEvidenceHtml(dialogItem)"></div>
+                        <p
+                            v-for="(evidence, index) in dialogItem.source_evidence"
+                            :key="index"
+                            class="wp-attribute-text wp-source-evidence"
+                        >{{ evidence }}</p>
                     </div>
                 </v-card-text>
                 <v-card-actions>
@@ -66,12 +80,9 @@
 </template>
 
 <script>
-import api from "../common/api.js";
-import permissions from "../common/permissions";
-
 export default {
     name: "WorksPackagesPreview",
-    props: ['previewData'],
+    props: ['previewData', 'metadata'],
     components: {},
     data() {
         return {
@@ -86,34 +97,16 @@ export default {
         };
     },
 
-    async mounted() {
-        const self = this;
-    },
-
     watch: {
         previewData: {
-            handler(n, o) {
+            handler() {
                 this.selectAllPreviewItems();
             },
             immediate: true,
         },
     },
 
-    computed: {
-
-    },
-
     methods: {
-        getSourceEvidenceHtml(dialogItem) {
-            let html = "";
-
-            if (dialogItem?.source_evidence) {
-                html = dialogItem.source_evidence.map(evidence => `<p>${evidence}</p>`).join('');
-            }
-
-            return html;
-        },
-
         showDialog(item) {
             if (item.attributes?.ai_rationale || item?.source_evidence) {
                 this.dialogItem = item;
@@ -144,21 +137,21 @@ export default {
         // behaviour: ticking/unticking a parent ticks/unticks its whole subtree,
         // and ticking a child ticks its ancestors so it is never orphaned.
         onPreviewSelectionChange(selection) {
-            const previousIds = new Set(this.selectedPreviewItems.map(item => item.id));
-            const selectionIds = new Set(selection.map(item => item.id));
-            const result = new Map(selection.map(item => [item.id, item]));
+            const previousIds = new Set(this.selectedPreviewItems.map(item => item.selection_key));
+            const selectionIds = new Set(selection.map(item => item.selection_key));
+            const result = new Map(selection.map(item => [item.selection_key, item]));
 
             selection
-                .filter(item => !previousIds.has(item.id))
+                .filter(item => !previousIds.has(item.selection_key))
                 .forEach(item => {
-                    this.previewItemDescendants(item).forEach(child => result.set(child.id, child));
-                    this.previewItemAncestors(item).forEach(parent => result.set(parent.id, parent));
+                    this.previewItemDescendants(item).forEach(child => result.set(child.selection_key, child));
+                    this.previewItemAncestors(item).forEach(parent => result.set(parent.selection_key, parent));
                 });
 
             this.selectedPreviewItems
-                .filter(item => !selectionIds.has(item.id))
+                .filter(item => !selectionIds.has(item.selection_key))
                 .forEach(item => {
-                    this.previewItemDescendants(item).forEach(child => result.delete(child.id));
+                    this.previewItemDescendants(item).forEach(child => result.delete(child.selection_key));
                 });
 
             this.selectedPreviewItems = Array.from(result.values());
@@ -183,7 +176,7 @@ export default {
                     return;
                 }
 
-                if (candidate.id === item.id) {
+                if (candidate.selection_key === item.selection_key) {
                     ancestors = trail;
                 } else if (candidate.children && candidate.children.length) {
                     ancestors = this.previewItemAncestors(item, candidate.children, trail.concat(candidate));
@@ -193,60 +186,21 @@ export default {
             return ancestors;
         },
 
-        isPreviewItemSelected(item) {
-            return this.selectedPreviewItems.some(selected => selected.id === item.id);
-        },
-
-        // Rebuilds the nested parent/child structure from the flat selection the
-        // treeview gives us. A ticked parent is kept even when none of its
-        // children are ticked, and an unticked parent is kept if it still has
-        // ticked children.
-        buildSelectedPreviewTree(items) {
-            const selected = [];
-
-            (items || []).forEach(item => {
-                const children = item.children && item.children.length
-                    ? this.buildSelectedPreviewTree(item.children)
-                    : [];
-
-                if (!this.isPreviewItemSelected(item) && !children.length) {
-                    return;
-                }
-
-                const node = { ...item };
-
-                if (item.children && item.children.length) {
-                    node.children = children;
-                }
-
-                selected.push(node);
-            });
-
-            return selected;
-        },
-
         countPreviewItems() {
-            let total = 0;
-
-            if (this.previewData) {
-                total += this.previewData.length;
-
-                this.previewData.forEach(item => {
-                    total += item?.children?.length || 0;
-                });
-            }
-
-            return total;
+            return this.flattenPreviewItems(this.previewData).length;
         },
 
         countItemChildren(item) {
-            let total = '';
-
-            if (item.children) {
-                total = '(' + item.children.length + ')';
+            if (item.attributes?.allocated_lines !== undefined) {
+                return '(' + item.attributes.allocated_lines + ' lines)';
             }
 
-            return total;
+            if (item.children && item.children.length) {
+                const label = this.metadata?.allocation_node_label || 'items';
+                return '(' + item.children.length + ' ' + label + ')';
+            }
+
+            return '';
         },
 
         close() {
@@ -254,9 +208,7 @@ export default {
         },
 
         save() {
-            let selectedItems = this.buildSelectedPreviewTree(this.previewData);
-
-            this.$emit("save", selectedItems);
+            this.$emit("save", this.selectedPreviewItems.map(item => item.selection_key));
         },
     },
 };
@@ -286,5 +238,17 @@ export default {
     overflow: hidden;
     text-overflow: ellipsis;
     cursor: pointer;
+}
+
+.wp-preview-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    color: #4f5964;
+    font-size: 13px;
+}
+
+.wp-source-evidence {
+    white-space: pre-line;
 }
 </style>

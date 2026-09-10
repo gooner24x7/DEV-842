@@ -5,26 +5,37 @@ namespace App\Service;
 
 use App\Models\Questionnaire\WorksPackage;
 use App\Models\User;
-use App\Repository\ProjectRepository;
-use App\Service\BoqAllocator\BoqAllocationEngine;
-use GuzzleHttp\Exception\GuzzleException;
+use BoqAllocator\Services\BoqAllocationEngine;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
+use RuntimeException;
 
 class ProjectService
 {
     /** Maximum number of works package levels (parent + 3 nested levels) that can be imported. */
     private const MAX_WORKS_PACKAGE_DEPTH = 4;
 
-    private ProjectRepository $projectRepository;
-    private OpenAIService $openAiService;
+    private const BOQ_PREVIEW_CACHE_PREFIX = 'boq:preview:';
+    private const BOQ_PREVIEW_TTL_MINUTES = 60;
 
-    public function __construct(ProjectRepository $projectRepository, OpenAIService $openAiService) {
-        $this->projectRepository = $projectRepository;
-        $this->openAiService = $openAiService;
+    private const BOQ_TEMPLATES = [
+        'nrm1' => 'NRM1 template.csv',
+        'nrm2' => 'NRM2 template.csv',
+        'wd' => 'WD template.csv',
+    ];
+
+    private BoqAllocationEngine $boqAllocationEngine;
+
+    public function __construct(BoqAllocationEngine $boqAllocationEngine)
+    {
+        $this->boqAllocationEngine = $boqAllocationEngine;
     }
 
     /**
@@ -82,54 +93,183 @@ class ProjectService
         DB::table('boq_items')->where('project_id', $projectId)->delete();
     }
 
-    public function getWorksPackagesFromBoqFile(UploadedFile $file, string $template): array
+    public static function getBoqTemplates(): array
     {
-        $worksPackages = [];
-
-        try {
-            $cacheKey = $this->getWorksPackagesCacheKey($file);
-            //Cache::store('redis')->forget($cacheKey);
-
-            $worksPackages = Cache::store('redis')->remember($cacheKey, now()->addHour(), function () use ($file, $template) {
-                $path = Storage::putFileAs('boq_files', $file, $file->getClientOriginalName());
-                $engine = app(BoqAllocationEngine::class);
-
-                $result = $engine->allocate(
-                    boqPath: storage_path('app/' . $path),
-                    templatePath: storage_path('app/templates/' . $template),
-                    //modelKey: 'gemini-3.6-flash',
-                    modelKey: 'gemini-3.5-flash-lite',
-                    //customPromptRules: 'Always allocate drainage works to Substructure contractor.',
-                    progressCallback: function (string $statusMessage, int $percent) {
-                        logger()->info("[{$percent}%] {$statusMessage}");
-                    }
-                );
-
-                $metadata = $result->metadata;
-                Log::info(json_encode($metadata));
-
-                return $result->workPackages;
-            });
-
-            if (!is_array($worksPackages)) {
-                throw new \Exception('Response does not contain a valid work_packages array.');
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to get works packages from file: ' . $e->getMessage());
-        }
-
-        return $worksPackages;
+        return self::BOQ_TEMPLATES;
     }
 
-    private function getWorksPackagesCacheKey(UploadedFile $file): string
-    {
-        $filePath = $file->getRealPath();
+    public function createWorksPackagesPreview(
+        UploadedFile $file,
+        string $template,
+        int $projectId,
+        int $userId
+    ): array {
+        $templateFilename = self::BOQ_TEMPLATES[$template] ?? null;
 
-        if ($filePath !== false && is_readable($filePath)) {
-            return 'openai:works_packages:' . hash_file('sha256', $filePath);
+        if ($templateFilename === null) {
+            throw new InvalidArgumentException('The selected BOQ template is not supported.');
         }
 
-        return 'openai:works_packages:' . hash('sha256', $file->getClientOriginalName());
+        $storedPath = Storage::disk('local')->putFileAs(
+            'boq_files',
+            $file,
+            Str::uuid()->toString() . '.xlsx'
+        );
+
+        if (!is_string($storedPath)) {
+            throw new RuntimeException('The uploaded BOQ file could not be stored.');
+        }
+
+        try {
+            $this->ensureDecisionCacheExists();
+
+            $templatePath = rtrim((string) config('boq-allocator.templates_path'), DIRECTORY_SEPARATOR)
+                . DIRECTORY_SEPARATOR
+                . $templateFilename;
+
+            if (!is_file($templatePath) || !is_readable($templatePath)) {
+                throw new RuntimeException('The selected BOQ template is unavailable.');
+            }
+
+            $result = $this->boqAllocationEngine->allocate(
+                boqPath: Storage::disk('local')->path($storedPath),
+                templatePath: $templatePath,
+                modelKey: (string) config('boq-allocator.default_model'),
+                progressCallback: static function (string $statusMessage, int $percent): void {
+                    Log::info('BOQ allocation progress', [
+                        'percentage' => $percent,
+                        'message' => $statusMessage,
+                    ]);
+                }
+            );
+        } finally {
+            Storage::disk('local')->delete($storedPath);
+        }
+
+        $previewId = Str::uuid()->toString();
+        $worksPackages = $this->addSelectionKeys($result->workPackages);
+
+        Cache::put($this->getBoqPreviewCacheKey($previewId), [
+            'project_id' => $projectId,
+            'user_id' => $userId,
+            'work_packages' => $worksPackages,
+        ], now()->addMinutes(self::BOQ_PREVIEW_TTL_MINUTES));
+
+        Log::info('BOQ allocation completed', $result->metadata + [
+            'project_id' => $projectId,
+            'user_id' => $userId,
+            'preview_id' => $previewId,
+        ]);
+
+        return [
+            'preview_id' => $previewId,
+            'expires_in_minutes' => self::BOQ_PREVIEW_TTL_MINUTES,
+            'metadata' => $result->metadata,
+            'work_packages' => $worksPackages,
+        ];
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    public function storeWorksPackagesFromPreview(
+        string $previewId,
+        array $selectedKeys,
+        int $projectId,
+        User $user
+    ): array {
+        $preview = Cache::get($this->getBoqPreviewCacheKey($previewId));
+
+        if (!is_array($preview)) {
+            throw new InvalidArgumentException('This BOQ preview has expired. Please upload the file again.');
+        }
+
+        if ((int) ($preview['project_id'] ?? 0) !== $projectId
+            || (int) ($preview['user_id'] ?? 0) !== $user->getId()) {
+            throw new AuthorizationException('This BOQ preview does not belong to the current project and user.');
+        }
+
+        $selectedKeys = array_values(array_unique(array_filter($selectedKeys, 'is_string')));
+        $worksPackages = $this->filterPreviewTree(
+            (array) ($preview['work_packages'] ?? []),
+            array_fill_keys($selectedKeys, true)
+        );
+
+        if ($worksPackages === []) {
+            throw new InvalidArgumentException('Select at least one BOQ item to import.');
+        }
+
+        $created = $this->storeWorksPackages($worksPackages, $projectId, $user);
+        Cache::forget($this->getBoqPreviewCacheKey($previewId));
+
+        return $created;
+    }
+
+    private function getBoqPreviewCacheKey(string $previewId): string
+    {
+        return self::BOQ_PREVIEW_CACHE_PREFIX . $previewId;
+    }
+
+    private function ensureDecisionCacheExists(): void
+    {
+        $cachePath = (string) config('boq-allocator.decision_cache_path');
+        $seedPath = (string) config('boq-allocator.decision_cache_seed_path');
+
+        if ($cachePath === '' || is_file($cachePath)) {
+            return;
+        }
+
+        if ($seedPath === '' || !is_file($seedPath)) {
+            throw new RuntimeException('The BOQ decision-cache seed is unavailable.');
+        }
+
+        File::ensureDirectoryExists(dirname($cachePath));
+
+        if (!@copy($seedPath, $cachePath) && !is_file($cachePath)) {
+            throw new RuntimeException('The BOQ decision cache could not be initialised.');
+        }
+    }
+
+    private function addSelectionKeys(array $items, string $parentPath = 'root'): array
+    {
+        $result = [];
+
+        foreach (array_values($items) as $index => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $path = $parentPath . '/' . $index . ':' . (string) ($item['id'] ?? 'node');
+            $item['selection_key'] = 'boq_' . substr(hash('sha256', $path), 0, 24);
+            $item['children'] = $this->addSelectionKeys((array) ($item['children'] ?? []), $path);
+            $result[] = $item;
+        }
+
+        return $result;
+    }
+
+    private function filterPreviewTree(array $items, array $selectedKeys): array
+    {
+        $result = [];
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $children = $this->filterPreviewTree((array) ($item['children'] ?? []), $selectedKeys);
+            $selected = isset($selectedKeys[(string) ($item['selection_key'] ?? '')]);
+
+            if (!$selected && $children === []) {
+                continue;
+            }
+
+            $item['children'] = $children;
+            unset($item['selection_key']);
+            $result[] = $item;
+        }
+
+        return $result;
     }
 
     /**
@@ -137,25 +277,13 @@ class ProjectService
      */
     public function storeWorksPackages(array $worksPackages, int $projectId, User $user): array
     {
-        DB::beginTransaction();
-
-        try {
-            $created = $this->storeWorksPackageLevel($worksPackages, $projectId, $user, null, 1);
-
-            DB::commit();
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            Log::error('Error storing works packages: ' . $e->getMessage(), [
-                'works_packages' => $worksPackages,
-                'project_id' => $projectId,
-                'user_id' => $user->getId(),
-            ]);
-
-            return [];
-        }
-
-        return $created;
+        return DB::transaction(fn (): array => $this->storeWorksPackageLevel(
+            $worksPackages,
+            $projectId,
+            $user,
+            null,
+            1
+        ));
     }
 
     /**
@@ -194,6 +322,10 @@ class ProjectService
                 ]);
 
                 continue;
+            }
+
+            if (mb_strlen($name) > 255) {
+                throw new InvalidArgumentException('A BOQ hierarchy item name exceeds 255 characters.');
             }
 
             $worksPackage = WorksPackage::create([

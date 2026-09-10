@@ -9,6 +9,13 @@
     "license": "MIT",
     "repositories": [
         {
+            "type": "path",
+            "url": "packages/laravel-boq-allocator",
+            "options": {
+                "symlink": false
+            }
+        },
+        {
             "type": "vcs",
             "url": "https://github.com/arquivei/laravel-prometheus-exporter"
         }
@@ -22,6 +29,7 @@
         "ayles-software/laravel-zoho-desk": "*",
         "barryvdh/laravel-dompdf": "^2.2",
         "bnbwebexpertise/laravel-attachments": "*",
+        "construction/boq-allocator": "@dev",
         "doctrine/dbal": "^3.0",
         "geocoder-php/bing-maps-provider": "*",
         "geocoder-php/google-maps-provider": "*",
@@ -94,6 +102,7 @@
         ]
     },
     "require-dev": {
+        "barryvdh/laravel-debugbar": "3.16.0",
         "kwn/php-rdkafka-stubs": "*",
         "mockery/mockery": "*",
         "nunomaduro/collision": "^7.10",

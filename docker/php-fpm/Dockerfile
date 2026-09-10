@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     librdkafka-dev \
     libmagickwand-dev \
+    libonig-dev \
+    libxml2-dev \
     libzip-dev \
     poppler-utils
 
@@ -36,6 +38,7 @@ RUN "date"
 
 # Type docker-php-ext-install to see available extensions
 RUN docker-php-ext-install pdo_mysql && docker-php-ext-enable pdo_mysql
+RUN docker-php-ext-install dom mbstring
 RUN docker-php-ext-install zip && docker-php-ext-enable zip
 RUN docker-php-ext-install gd && docker-php-ext-enable gd
 RUN docker-php-ext-install bcmath && docker-php-ext-enable bcmath

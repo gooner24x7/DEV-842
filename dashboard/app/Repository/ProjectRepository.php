@@ -150,6 +150,26 @@ class ProjectRepository
         return false;
     }
 
+    public function canUserAccessProject(int $projectId, User $user): bool
+    {
+        $companyUserIds = $user->getCompanyUsers();
+
+        return Project::query()
+            ->whereKey($projectId)
+            ->where(function ($query) use ($user, $companyUserIds) {
+                $query->whereIn('projects.user_id', $companyUserIds)
+                    ->orWhere('projects.framework', $user->getFirstName())
+                    ->orWhere('projects.client_name', $user->getFirstName())
+                    ->orWhereExists(function ($subQuery) use ($user) {
+                        $subQuery->select(DB::raw(1))
+                            ->from('projects_user_access')
+                            ->whereColumn('projects_user_access.project_id', 'projects.id')
+                            ->where('projects_user_access.user_id', $user->getId());
+                    });
+            })
+            ->exists();
+    }
+
     /**
      * @throws \Exception
      */

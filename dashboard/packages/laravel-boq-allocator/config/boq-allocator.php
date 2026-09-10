@@ -3,10 +3,10 @@
 return [
     /*
     |--------------------------------------------------------------------------
-    | Default AI Model
+    | Default AI Provider & Model
     |--------------------------------------------------------------------------
-    | AITOOLV3 uses OpenAI Responses for records that deterministic rules leave
-    | for review. Most records do not require an API call.
+    | Default model to use for BoQ classification if none specified in request.
+    | AITOOLV3 defaults to gpt-5.6-luna through the OpenAI Responses API.
     */
     'default_model' => env('BOQ_DEFAULT_MODEL', env('OPENAI_MODEL', 'gpt-5.6-luna')),
 
@@ -39,24 +39,11 @@ return [
     | Default template to use if none is selected.
     */
     'default_template' => env('BOQ_DEFAULT_TEMPLATE', 'WD template.csv'),
-    
+
     /*
     |--------------------------------------------------------------------------
     | Templates Storage Path
     |--------------------------------------------------------------------------
     */
-    'templates_path' => base_path('packages/laravel-boq-allocator/templates'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Decision Cache
-    |--------------------------------------------------------------------------
-    | The writable cache is initialised from the version-controlled package
-    | seed on first use. Existing decisions are never overwritten.
-    */
-    'decision_cache_path' => env(
-        'BOQ_DECISION_CACHE_PATH',
-        storage_path('app/boq-allocator/decision-cache.php')
-    ),
-    'decision_cache_seed_path' => base_path('packages/laravel-boq-allocator/resources/decision-cache.php'),
+    'templates_path' => storage_path('app/templates'),
 ];

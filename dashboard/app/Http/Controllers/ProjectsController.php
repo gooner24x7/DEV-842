@@ -5,23 +5,20 @@ namespace App\Http\Controllers;
 use App\Dto\Project\ProjectDto;
 use App\Dto\Project\SearchParamsDto;
 use App\Exceptions\NotFoundException;
-use App\Jobs\ProcessBoqAllocationJob;
 use App\Models\Questionnaire\Project;
 use App\Models\Questionnaire\ProjectUserAccess;
 use App\Models\Role;
 use App\Models\SupplyFitEnquiryQuote;
 use App\Models\User;
 use App\Repository\ProjectRepository;
-use App\Service\BoqAllocator\BoqAllocationEngine;
-use App\Service\OpenAIService;
 use App\Service\UserService;
 use App\Service\ProjectService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
 class ProjectsController
@@ -438,31 +435,48 @@ class ProjectsController
             return new JsonResponse('Not authorized', Response::HTTP_FORBIDDEN);
         }
 
-        $file = $request->file('boq_file');
-        $projectId = $request->get('project_id');
-        $template = $request->get('template', 'NRM2 template.csv');
+        $validated = $request->validate([
+            'project_id' => ['required', 'integer'],
+            'boq_file' => ['required', 'file', 'mimes:xlsx', 'max:51200'],
+            'template' => ['required', Rule::in(array_keys(ProjectService::getBoqTemplates()))],
+        ]);
 
-        if (empty($projectId) || empty($file)) {
-            return new JsonResponse('Bad request', Response::HTTP_BAD_REQUEST);
-        }
+        $projectId = (int) $validated['project_id'];
+        $file = $request->file('boq_file');
+        $template = (string) $validated['template'];
 
         $project = Project::find($projectId);
         if (!$project) {
             return new JsonResponse('Not found', Response::HTTP_NOT_FOUND);
         }
 
-        if (!$file->isValid()) {
-            return new JsonResponse('Invalid uploaded file', Response::HTTP_BAD_REQUEST);
+        if (!$this->projectRepository->canUserAccessProject($projectId, $user)) {
+            return new JsonResponse('Not authorized', Response::HTTP_FORBIDDEN);
         }
 
-        $extension = strtolower($file->getClientOriginalExtension());
-        if (!in_array($extension, ['csv', 'xls', 'xlsx'], true)) {
-            return new JsonResponse('Only CSV, XLS and XLSX files are supported', Response::HTTP_BAD_REQUEST);
+        try {
+            $preview = $this->projectService->createWorksPackagesPreview(
+                $file,
+                $template,
+                $projectId,
+                $user->getId()
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return new JsonResponse($exception->getMessage(), Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\Throwable $exception) {
+            Log::error('BOQ allocation failed', [
+                'project_id' => $projectId,
+                'user_id' => $user->getId(),
+                'error' => $exception->getMessage(),
+            ]);
+
+            return new JsonResponse(
+                'The BOQ could not be allocated. Please check the file format and try again.',
+                Response::HTTP_INTERNAL_SERVER_ERROR
+            );
         }
 
-        $worksPackages = $this->projectService->getWorksPackagesFromBoqFile($file, $template);
-
-        return new JsonResponse($worksPackages);
+        return new JsonResponse($preview);
     }
 
     public function createWorksPackages(Request $request)
@@ -472,26 +486,46 @@ class ProjectsController
             return new JsonResponse('Not authorized', Response::HTTP_FORBIDDEN);
         }
 
-        $projectId = $request->get('project_id');
-        $boqData = $request->get('boq_data');
+        $validated = $request->validate([
+            'project_id' => ['required', 'integer'],
+            'preview_id' => ['required', 'uuid'],
+            'selected_keys' => ['required', 'array', 'min:1', 'max:5000'],
+            'selected_keys.*' => ['required', 'string', 'max:32', 'distinct'],
+        ]);
 
-        if (empty($projectId) || empty($boqData)) {
-            return new JsonResponse('Bad request', Response::HTTP_BAD_REQUEST);
-        }
+        $projectId = (int) $validated['project_id'];
 
         $project = Project::find($projectId);
         if (!$project) {
             return new JsonResponse('Not found', Response::HTTP_NOT_FOUND);
         }
 
-        if (!is_array($boqData)) {
-            return new JsonResponse('Invalid data format', Response::HTTP_BAD_REQUEST);
+        if (!$this->projectRepository->canUserAccessProject($projectId, $user)) {
+            return new JsonResponse('Not authorized', Response::HTTP_FORBIDDEN);
         }
 
         try {
-            $worksPackages = $this->projectService->storeWorksPackages($boqData, (int) $projectId, $user);
-        } catch (\Throwable $e) {
-            return new JsonResponse($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            $worksPackages = $this->projectService->storeWorksPackagesFromPreview(
+                (string) $validated['preview_id'],
+                $validated['selected_keys'],
+                $projectId,
+                $user
+            );
+        } catch (AuthorizationException $exception) {
+            return new JsonResponse($exception->getMessage(), Response::HTTP_FORBIDDEN);
+        } catch (\InvalidArgumentException $exception) {
+            return new JsonResponse($exception->getMessage(), Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\Throwable $exception) {
+            Log::error('Failed to store BOQ works packages', [
+                'project_id' => $projectId,
+                'user_id' => $user->getId(),
+                'error' => $exception->getMessage(),
+            ]);
+
+            return new JsonResponse(
+                'The selected BOQ hierarchy could not be saved.',
+                Response::HTTP_INTERNAL_SERVER_ERROR
+            );
         }
 
         $count = count($worksPackages);

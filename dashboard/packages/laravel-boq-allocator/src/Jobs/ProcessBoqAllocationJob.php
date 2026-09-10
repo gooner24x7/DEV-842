@@ -1,11 +1,9 @@
 <?php
 
-declare(strict_types=1);
+namespace BoqAllocator\Jobs;
 
-namespace App\Jobs;
-
-use App\Events\BoqAllocationProgress;
-use App\Service\BoqAllocator\BoqAllocationEngine;
+use BoqAllocator\Events\BoqAllocationProgress;
+use BoqAllocator\Services\BoqAllocationEngine;
 use Exception;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -48,7 +46,6 @@ class ProcessBoqAllocationJob implements ShouldQueue
 
     /**
      * Execute the job.
-     * @throws Exception
      */
     public function handle(BoqAllocationEngine $engine): void
     {

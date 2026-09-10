@@ -73,12 +73,12 @@
                 <v-card-title>Upload File</v-card-title>
                 <v-card-text>
                     <p>Please upload your bill of quantities file</p>
-                    <p>Accepted file types: .csv, .xls, .xlsx</p>
+                    <p>Accepted file type: .xlsx</p>
                     <v-file-input
                         v-model="boqFile"
                         name="boq_file"
                         id="boq_file"
-                        accept=".csv, .xls, .xlsx"
+                        accept=".xlsx"
                         label="Select File"
                     ></v-file-input>
 
@@ -91,7 +91,12 @@
                 <v-card-actions>
                     <v-spacer></v-spacer>
                     <v-btn color="blue darken-1" text @click="dialogBoq = false">Cancel</v-btn>
-                    <v-btn color="blue darken-1" text @click="uploadBoqFile()">Upload</v-btn>
+                    <v-btn
+                        color="blue darken-1"
+                        text
+                        :disabled="!boqFile || !selectedBoqTemplate || saving"
+                        @click="uploadBoqFile()"
+                    >Upload</v-btn>
                 </v-card-actions>
             </v-card>
         </v-dialog>
@@ -99,6 +104,7 @@
         <v-dialog v-model="dialogPreview" max-width="900px">
             <works-packages-preview
                 :preview-data="previewData"
+                :metadata="previewMetadata"
                 @close="dialogPreview = false"
                 @save="createWorksPackages"
             ></works-packages-preview>
@@ -424,13 +430,15 @@ export default {
             dialogPreview: false,
             dialogPreviewId: null,
             previewData: null,
+            previewMetadata: null,
+            previewId: null,
             selectedPreviewItems: [],
             boqTemplates: [
-                "NRM1 template.csv",
-                "NRM2 template.csv",
-                "WD template.csv",
+                {text: "NRM1 Cost Elements", value: "nrm1"},
+                {text: "NRM2 Work Sections", value: "nrm2"},
+                {text: "WD Works Packages", value: "wd"},
             ],
-            selectedBoqTemplate: null,
+            selectedBoqTemplate: "nrm2",
             expanded: [],
             reportData: [],
             editedIndex: -1,
@@ -781,7 +789,7 @@ export default {
             const formData = new FormData();
             const projectId = self.dialogBoqItem.id ?? null;
 
-            if (!projectId || !self.boqFile) {
+            if (!projectId || !self.boqFile || !self.selectedBoqTemplate) {
                 return;
             }
 
@@ -793,14 +801,11 @@ export default {
             self.saving = true;
 
             api.uploadBoqFile(formData).then(response => {
-                self.previewData = response.data;
+                self.previewData = response.data.work_packages || [];
+                self.previewMetadata = response.data.metadata || null;
+                self.previewId = response.data.preview_id || null;
                 self.dialogPreview = true;
                 self.dialogPreviewId = projectId;
-
-                // self.$store.commit("showSnackbar", {
-                //     message: response.data ?? 'File uploaded',
-                //     color: "success",
-                // });
 
                 self.dialogBoqItem = null;
                 self.boqFile = null;
@@ -809,7 +814,7 @@ export default {
                 console.error(error);
 
                 self.$store.commit("showSnackbar", {
-                    message: "An error occurred",
+                    message: error.response?.data?.message || error.response?.data || "The BOQ could not be allocated",
                     color: "error",
                 });
             }).finally(() => {
@@ -817,41 +822,16 @@ export default {
             });
         },
 
-        async uploadBoqFileAsync(projectId, file) {
-            const self = this;
-            const formData = new FormData();
-
-            formData.append('boq_file', file);
-            formData.append('project_id', projectId);
-
-            self.dialogConvert = false;
-            self.saving = true;
-
-            try {
-                const response = await api.uploadBoqFile(formData);
-
-                self.previewData = response.data;
-                self.dialogPreviewId = projectId;
-                self.dialogPreview = true;
-
-                // self.$store.commit("showSnackbar", {
-                //     message: response.data ?? 'File uploaded',
-                //     color: "success",
-                // });
-            } catch(error) {
-                console.error(error);
-            }
-
-            self.saving = false;
-        },
-
-        createWorksPackages(items) {
+        createWorksPackages(selectedKeys) {
             const self = this;
 
             let data = {
                 project_id: self.dialogPreviewId,
-                boq_data: items,
+                preview_id: self.previewId,
+                selected_keys: selectedKeys,
             };
+
+            self.saving = true;
 
             api.createWorksPackagesFromBoq(data).then(response => {
                 self.$store.commit("showSnackbar", {
@@ -862,18 +842,28 @@ export default {
                 self.selectedPreviewItems = [];
                 self.dialogPreview = false;
                 self.dialogPreviewId = null;
+                self.previewData = null;
+                self.previewMetadata = null;
+                self.previewId = null;
                 self.dialogBoq = false;
                 self.dialogConvert = false;
                 self.dialogBoqItem = null;
                 self.dialogConvertItem = null;
                 self.boqFile = null;
+
+                self.$router.push({
+                    name: "works-packages",
+                    params: {projectId: data.project_id}
+                });
             }).catch(error => {
                 console.error(error);
 
                 self.$store.commit("showSnackbar", {
-                    message: "An error occurred",
+                    message: error.response?.data?.message || error.response?.data || "The BOQ hierarchy could not be saved",
                     color: "error",
                 });
+            }).finally(() => {
+                self.saving = false;
             });
         },
 
@@ -881,6 +871,8 @@ export default {
             const self = this;
 
             self.dialogBoqItem = item;
+            self.boqFile = null;
+            self.selectedBoqTemplate = "nrm2";
             self.dialogBoq = true;
         },
 
