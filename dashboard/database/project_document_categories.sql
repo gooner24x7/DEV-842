@@ -1,0 +1,53 @@
+TRUNCATE TABLE project_document_categories;
+
+-- insert top level categories
+INSERT INTO project_document_categories (id, parent_id, title, slug) VALUES
+(1, null, 'Project Information', 'project-info'),
+(2, null, 'Design Information', 'design-info'),
+(3, null, 'Commercial & Procurement', 'commercial'),
+(4, null, 'Programme', 'programme'),
+(5, null, 'Legal & Compliance', 'legal'),
+(6, null, 'Quality', 'quality'),
+(7, null, 'Health & Safety', 'health'),
+(8, null, 'Social Value & ESG', 'social'),
+(9, null, 'Site Information', 'site-info');
+
+-- insert child categories
+INSERT INTO project_document_categories (parent_id, title, slug) VALUES
+(1, 'Project Brief', 'project-brief'),
+(1, 'Contacts', 'contacts'),
+(1, 'Site Information', 'site-info'),
+(1, 'Organisation Chart', 'organisation-chart'),
+(2, 'Architectural Drawings', 'architectural-drawings'),
+(2, 'Structural Drawings', 'structural-drawings'),
+(2, 'Civil Drawings', 'civil-drawings'),
+(2, 'M&E Drawings', 'me-drawings'),
+(2, 'Specifications', 'specifications'),
+(2, 'BIM Models', 'bim-models'),
+(3, 'Bill of Quantities', 'boq'),
+(3, 'Work Package Scopes', 'work-package-scopes'),
+(3, 'Pricing Schedules', 'pricing-schedules'),
+(3, 'Tender Clarifications', 'tender-clarifications'),
+(3, 'Award Letters', 'award-letters'),
+(3, 'Change Events', 'change-events'),
+(4, 'Master Programme', 'master-programme'),
+(4, 'Look Ahead Programmes', 'look-ahead-programmes'),
+(4, 'Milestones', 'milestones'),
+(5, 'Contract', 'contract'),
+(5, 'Insurance', 'insurance'),
+(5, 'Warranties', 'warranties'),
+(5, 'Bonds', 'bonds'),
+(6, 'ITPs', 'itps'),
+(6, 'Test Certificates', 'test-certificates'),
+(6, 'Snagging', 'snagging'),
+(7, 'Construction Phase Plan', 'construction-phase-plan'),
+(7, 'RAMS', 'rams'),
+(7, 'Permits', 'permits'),
+(8, 'Local Spend', 'local-spend'),
+(8, 'Apprenticeships', 'apprenticeships'),
+(8, 'Carbon', 'carbon'),
+(8, 'Community Benefits', 'community-benefits'),
+(9, 'Surveys', 'surveys'),
+(9, 'Utilities', 'utilities'),
+(9, 'Existing Services', 'existing-services'),
+(9, 'Photos', 'photos');

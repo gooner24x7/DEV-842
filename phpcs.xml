@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<ruleset name="PHP_CodeSniffer">
+    <description>The coding standard for our project.</description>
+    <rule ref="PSR2"/>
+
+    <file>dashboard/app</file>
+    <file>dashboard/bootstrap</file>
+    <file>dashboard/config</file>
+    <file>dashboard/database</file>
+    <file>dashboard/resources</file>
+    <file>dashboard/routes</file>
+    <file>dashboard/tests</file>
+
+    <exclude-pattern>dashboard/bootstrap/cache/*</exclude-pattern>
+    <exclude-pattern>dashboard/bootstrap/autoload.php</exclude-pattern>
+    <exclude-pattern>dashboard/*/migrations/*</exclude-pattern>
+    <exclude-pattern>dashboard/*/seeds/*</exclude-pattern>
+    <exclude-pattern>dashboard/*.blade.php</exclude-pattern>
+    <exclude-pattern>dashboard/*.js</exclude-pattern>
+
+    <!-- Show progression -->
+    <arg value="p"/>
+</ruleset>

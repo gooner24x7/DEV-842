@@ -1,0 +1,36 @@
+services:
+  nginx:
+    container_name: nginx-project1
+    build: ./docker/nginx
+    working_dir: /var/www
+    ports:
+      - '8096:80'
+    depends_on:
+      - php-fpm
+    volumes:
+      - .:/var/www/
+      - ./log:/var/log/
+  php-fpm:
+    container_name: php-fpm-project1
+    build: ./docker/php-fpm
+    depends_on:
+      - mysql
+    volumes:
+      - .:/var/www/
+  mysql:
+    container_name: mysql-project1
+    image: mariadb:10.5.23
+    ports:
+      - '3326:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: nhfypbcnjh
+      MYSQL_DATABASE: app2
+    volumes:
+      - ./data:/var/lib/mysql
+  redis:
+    ports:
+      - '6379:6379'
+    container_name: redis
+    image: "redis:alpine"
+volumes:
+  app-volume:

@@ -1,0 +1,5 @@
+POST http://localhost:8096/api/auth/login
+Content-Type: application/x-www-form-urlencoded
+Accept: application/json
+
+username=manager1&password=12345

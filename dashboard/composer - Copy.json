@@ -1,0 +1,7 @@
+{
+    "require": {
+        "laravel/socialite": "^5.26",
+        "socialiteproviders/microsoft-graph": "^4.1",
+        "laravel/framework": "^13.30"
+    }
+}

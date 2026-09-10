@@ -1,0 +1,28 @@
+TRUNCATE TABLE permissions;
+
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (1, 'View Enquiries', 'view_enquiries_ph', 'Purchase & Hire', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (2, 'Create Enquiry', 'create_enquiry_ph', 'Purchase & Hire', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (3, 'Create Quote', 'create_quote_ph', 'Purchase & Hire', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (4, 'View Enquiries', 'view_enquiries_sf', 'Trade Package Tenders', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (5, 'Create Enquiry', 'create_enquiry_sf', 'Trade Package Tenders', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (6, 'Create Quote', 'create_quote_sf', 'Trade Package Tenders', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (7, 'View Projects', 'view_projects', 'Projects', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (8, 'View Enquiries', 'view_enquiries_logistics', 'Logistics', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (9, 'Create Enquiry', 'create_enquiry_logistics', 'Logistics', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (10, 'Create Quote', 'create_quote_logistics', 'Logistics', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (11, 'View Merchant Report', 'view_merchant_report', 'Reports', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (12, 'View Contractor report', 'view_contractor_report', 'Reports', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (13, 'View Logistics Report', 'view_logistics_report', 'Reports', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (14, 'Manage Branches', 'manage_branches', 'Admin', '2026-04-22 09:47:30', '2026-04-22 09:47:30');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (15, 'Manage Subscriptions', 'manage_subscriptions', 'Admin', '2026-04-22 09:47:30', '2026-04-22 09:47:30');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (16, 'Manage Users', 'manage_users', 'Admin', '2026-04-22 10:17:47', '2026-04-22 10:17:47');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (17, 'Manage Supply Chain', 'manage_supply_chain', 'Supply Chain', '2026-04-22 11:48:39', '2026-04-22 11:48:39');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (18, 'Manage Local SME Users', 'manage_supply_chain_users', 'Supply Chain', '2026-04-22 11:48:39', '2026-04-22 11:48:39');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (19, 'Manage House List', 'manage_house_list', 'House Building', '2026-04-22 13:14:59', '2026-04-22 13:15:02');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (20, 'Edit Projects', 'edit_projects', 'Projects', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (21, 'Assign Users', 'project_assign_users', 'Projects', '2026-04-22 09:44:46', '2026-04-22 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (22, 'View Project Pipeline', 'view_project_pipeline', 'Projects', '2026-06-08 09:44:46', '2026-06-08 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (23, 'View Tender Notices', 'view_tender_notices', 'Projects', '2026-06-16 09:44:46', '2026-06-16 09:44:46');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (24, 'View Framework Comparison', 'view_framework_comparison', 'Reports', '2026-08-05 10:00:00', '2026-08-05 10:00:00');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (25, 'View Contractor Benchmarking', 'view_contractor_benchmarking', 'Reports', '2026-08-07 14:00:00', '2026-08-07 14:00:00');
+INSERT INTO permissions (id, name, slug, category, created_at, updated_at) VALUES (26, 'View Enquiries', 'view_enquiries_ap', 'Apprenticeships', '2026-08-24 12:00:00', '2026-08-24 12:00:00');
